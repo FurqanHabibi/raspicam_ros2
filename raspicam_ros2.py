@@ -15,10 +15,7 @@
 import os
 from io import BytesIO
 from math import modf
-from time import (
-    time,
-    sleep
-)
+from time import time
 from picamera import PiCamera
 from camera_info_manager import CameraInfoManager
 
@@ -85,7 +82,6 @@ class RaspicamRos2(Node):
 
     def run(self):
         with PiCamera() as camera:
-            sleep(2)
             camera.resolution = (416, 320)
             # Construct the frame processor and start recording data to it
             frame_processor = FrameProcessor(self)
