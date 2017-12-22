@@ -15,7 +15,10 @@
 import os
 from io import BytesIO
 from math import modf
-from time import time
+from time import (
+    time,
+    sleep
+)
 from picamera import PiCamera
 from camera_info_manager import CameraInfoManager
 
@@ -28,30 +31,36 @@ from sensor_msgs.msg import (
 )
 from builtin_interfaces.msg import Time
 
+class FrameProcessor(object):
+    def __init__(self, node):
+        self._node = node
+        #self._frames = 0
+        #self._time = time()
+
+    def write(self, frame):
+        self._node.publish_image(frame)
+        #self._frames += 1
+        #print('fps = ' + str(self._frames / (time() - self._time)))
+
+    def flush(self):
+        pass
+
 class RaspicamRos2(Node):
 
     def __init__(self):
         super().__init__('raspicam_ros2')
 
-        # timer
-        timer_period = 0.1  # seconds
-        self.timer = self.create_timer(timer_period, self.timer_callback)
-
         # vars
-        self._camera = PiCamera()
-        self._camera.resolution = (416, 320)
-        #self._camera.start_preview()
         self._camera_info_manager = CameraInfoManager(self, 'raspicam', namespace='/raspicam')
         camera_info_url = 'file://' + os.path.dirname(os.path.abspath(__file__)) + '/config/raspicam_410x308.yaml'
 
         # pubs
-        self._img_pub = self.create_publisher(Image, '/raspicam/image')
+        self._img_pub = self.create_publisher(Image, '/raspicam/image', qos_profile=rclpy.qos.qos_profile_sensor_data)
         self._camera_info_pub = self.create_publisher(CameraInfo, 'raspicam/camera_info')
 
         # camera info manager
         self._camera_info_manager.setURL(camera_info_url)
         self._camera_info_manager.loadCameraInfo()
-
     
     def _get_stamp(self, time_float):
         time_frac_int = modf(time_float)
@@ -60,23 +69,32 @@ class RaspicamRos2(Node):
         stamp.nanosec = int(time_frac_int[0] * 1000000000) & 0xffffffff
         return stamp
 
-    def timer_callback(self):
-        cam_stream = BytesIO()
-        self._camera.capture(cam_stream, 'rgb')
+    def publish_image(self, image):
         img = Image()
         img.encoding = 'rgb8'
         img.width = 416
         img.height = 320
         img.step = img.width * 3
-        img.data = cam_stream.getvalue()
+        img.data = image
         img.header.frame_id = 'raspicam'
         img.header.stamp = self._get_stamp(time())
         self._img_pub.publish(img)
         camera_info = self._camera_info_manager.getCameraInfo()
         camera_info.header = img.header
         self._camera_info_pub.publish(camera_info)
-        cam_stream.close()
-        print(img.header.stamp)
+
+    def run(self):
+        with PiCamera() as camera:
+            sleep(2)
+            camera.resolution = (416, 320)
+            # Construct the frame processor and start recording data to it
+            frame_processor = FrameProcessor(self)
+            camera.start_recording(frame_processor, 'rgb')
+            try:
+                while True:
+                    camera.wait_recording(1)
+            finally:
+                camera.stop_recording()
 
 
 def main(args=None):
@@ -84,7 +102,7 @@ def main(args=None):
 
     raspicam_ros2 = RaspicamRos2()
 
-    rclpy.spin(raspicam_ros2)
+    raspicam_ros2.run()
 
     # Destroy the node explicitly
     # (optional - otherwise it will be done automatically
