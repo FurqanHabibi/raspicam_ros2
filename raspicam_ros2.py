@@ -49,7 +49,7 @@ class RaspicamRos2(Node):
 
         # vars
         self._camera_info_manager = CameraInfoManager(self, 'raspicam', namespace='/raspicam')
-        camera_info_url = 'file://' + os.path.dirname(os.path.abspath(__file__)) + '/config/raspicam_410x308.yaml'
+        camera_info_url = 'file://' + os.path.dirname(os.path.abspath(__file__)) + '/config/raspicam_416x320.yaml'
 
         # pubs
         self._img_pub = self.create_publisher(Image, '/raspicam/image', qos_profile=rclpy.qos.qos_profile_sensor_data)
