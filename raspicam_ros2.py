@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+import sys
 from io import BytesIO
 from math import modf
 from time import time
@@ -31,29 +32,36 @@ from builtin_interfaces.msg import Time
 class FrameProcessor(object):
     def __init__(self, node):
         self._node = node
-        #self._frames = 0
-        #self._time = time()
+        self._frames = 0
+        self._time = modf(time())[1]
 
     def write(self, frame):
         self._node.publish_image(frame)
-        #self._frames += 1
-        #print('fps = ' + str(self._frames / (time() - self._time)))
+        if (time() - self._time < 1):
+            self._frames += 1
+        else:
+            print('fps = ' + str(self._frames))
+            self._frames = 0
+            self._time = modf(time())[1]
 
     def flush(self):
         pass
 
 class RaspicamRos2(Node):
 
-    def __init__(self):
+    def __init__(self, args):
         super().__init__('raspicam_ros2')
 
         # vars
-        self._camera_info_manager = CameraInfoManager(self, 'raspicam', namespace='/raspicam')
+        self._topic_name = 'raspicam'
+        if(len(args)>1):
+            self._topic_name = args[1]
+        self._camera_info_manager = CameraInfoManager(self, 'raspicam', namespace='/' + self._topic_name)
         camera_info_url = 'file://' + os.path.dirname(os.path.abspath(__file__)) + '/config/raspicam_416x320.yaml'
 
         # pubs
-        self._img_pub = self.create_publisher(Image, '/raspicam/image', qos_profile=rclpy.qos.qos_profile_sensor_data)
-        self._camera_info_pub = self.create_publisher(CameraInfo, 'raspicam/camera_info')
+        self._img_pub = self.create_publisher(Image, '/' + self._topic_name + '/image', qos_profile=rclpy.qos.qos_profile_sensor_data)
+        self._camera_info_pub = self.create_publisher(CameraInfo, '/' + self._topic_name + '/camera_info')
 
         # camera info manager
         self._camera_info_manager.setURL(camera_info_url)
@@ -94,9 +102,12 @@ class RaspicamRos2(Node):
 
 
 def main(args=None):
+    if args is None:
+        args = sys.argv
+
     rclpy.init(args=args)
 
-    raspicam_ros2 = RaspicamRos2()
+    raspicam_ros2 = RaspicamRos2(args)
 
     raspicam_ros2.run()
 
